@@ -55,3 +55,18 @@ status:
 about:
   title: About BibTeX Fixer
   text: "BibTeX Fixer v1.0\nA GUI tool for reading and editing BibTeX files."
+
+fetcher:
+  title: DOI / arXiv Fetcher
+  input_hint: Enter DOI, DOI URL, arXiv ID or arXiv URL
+  fetch: Fetch
+  fetching: Fetching...
+  result: Result
+  error: Fetch failed
+  copy_hint: Select and copy field values above to paste into the editor
+
+conference:
+  title: Select Conference
+  refresh: Reload
+  no_presets: No conference presets available
+  load_error: Failed to load conference presets file

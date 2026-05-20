@@ -13,6 +13,7 @@ from templates import (
     ENTRY_TYPES, get_template_fields, align_to_template,
     resolve_internal_key,
 )
+from gui_conference_picker import ConferencePickerDialog
 
 
 class EntryEditor(ttk.Frame):
@@ -23,7 +24,7 @@ class EntryEditor(ttk.Frame):
         self.on_change_callback = on_change_callback
         self._fonts = fonts or {}
         self._current_entry = None
-        self._field_rows = []  # [(name_var, value_var, name_entry, val_entry, row_frame), ...]
+        self._field_rows = []  # [(name_var, value_var, name_entry, val_entry, row, picker_btn), ...]
         self._suppress_change = False
 
         self._build_ui()
@@ -53,14 +54,23 @@ class EntryEditor(ttk.Frame):
         self._tmpl_label = ttk.Label(tmpl_frame, text=t("entry.template") + ":", style="Editor.TLabel")
         self._tmpl_label.pack(side=tk.LEFT)
 
-        # 构建下拉选项：显示名列表（internal_key → 翻译名）
-        self._type_display = {k: t(f"types.{k}") for k in ENTRY_TYPES}
-        self._type_values = list(self._type_display.values())
+        # 构建下拉选项：internal_key → "翻译名  →  field1, field2, ..."
+        self._type_display = {}
+        self._display_to_key_map = {}  # display → internal_key 反向映射
+        display_list = []
+        for k in ENTRY_TYPES:
+            fields = get_template_fields(k)
+            preview = ", ".join(fields)
+            display = f"{t(f'types.{k}')}  →  {preview}"
+            self._type_display[k] = display
+            self._display_to_key_map[display] = k
+            display_list.append(display)
+        self._type_values = display_list
 
         self._tmpl_var = tk.StringVar()
         self._tmpl_combo = ttk.Combobox(
             tmpl_frame, textvariable=self._tmpl_var, values=self._type_values,
-            state="readonly", width=22, font=nf,
+            state="readonly", width=50, font=nf,
         )
         self._tmpl_combo.pack(side=tk.LEFT, padx=5)
         self._tmpl_combo.bind("<<ComboboxSelected>>", self._on_type_changed)
@@ -137,24 +147,21 @@ class EntryEditor(ttk.Frame):
 
     def _display_to_key(self, display: str) -> str:
         """将模板下拉框显示名转回 internal_key。"""
-        for key, name in self._type_display.items():
-            if name == display:
-                return key
-        return "article"  # fallback
+        return self._display_to_key_map.get(display, "article")
 
     def _key_to_display(self, key: str) -> str:
-        """将 internal_key 转为模板下拉框显示名。"""
+        """将 internal_key 转为模板下拉框显示名（含字段预览）。"""
         return self._type_display.get(key, key)
 
     # ========== 字段操作 ==========
 
     def _clear_fields(self):
-        for _, _, _, _, row in self._field_rows:
+        for _, _, _, _, row, *_ in self._field_rows:
             row.destroy()
         self._field_rows.clear()
 
     def _add_field(self, field_name="", value=""):
-        """添加一个字段行。"""
+        """添加一个字段行。booktitle 字段会额外显示会议快捷填充按钮。"""
         nf = self._fonts.get("normal")
         row = ttk.Frame(self.field_container)
         row.pack(fill=tk.X, pady=2)
@@ -169,11 +176,25 @@ class EntryEditor(ttk.Frame):
         ttk.Label(row, text="=", style="Editor.TLabel").pack(side=tk.LEFT, padx=(0, 5))
         val_entry = ttk.Entry(row, textvariable=value_var, width=40, font=nf)
         val_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 5))
+
+        picker_btn = None
+        if field_name == "booktitle":
+            # 会议名快捷填充按钮
+            picker_btn = ttk.Button(
+                row, text="📋", width=3,
+                command=lambda v=value_var: self._open_conference_picker(v)
+            )
+            picker_btn.pack(side=tk.RIGHT, padx=(0, 2))
+
         del_btn = ttk.Button(row, text="✕", width=3,
                              command=lambda r=row, idx=len(self._field_rows): self._delete_field(r, idx))
         del_btn.pack(side=tk.RIGHT)
 
-        self._field_rows.append((name_var, value_var, name_entry, val_entry, row))
+        self._field_rows.append((name_var, value_var, name_entry, val_entry, row, picker_btn))
+
+    def _open_conference_picker(self, value_var: tk.StringVar):
+        """打开会议选择弹窗，选中后填入 booktitle。"""
+        ConferencePickerDialog(self, on_select_callback=value_var.set, fonts=self._fonts)
 
     def _delete_field(self, row_frame, index):
         if 0 <= index < len(self._field_rows):
@@ -278,7 +299,7 @@ class EntryEditor(ttk.Frame):
         return self._current_entry is not None
 
     def refresh_ui_text(self):
-        """语言切换后刷新文本，包括模板下拉框翻译。"""
+        """语言切换后刷新文本，包括模板下拉框翻译和字段预览。"""
         self._type_hint_label.config(text=t("entry.type_readonly"))
         self._tmpl_label.config(text=t("entry.template") + ":")
         self._key_label.config(text=t("entry.key") + ":")
@@ -289,9 +310,18 @@ class EntryEditor(ttk.Frame):
         # 先保存当前模板 internal_key（基于旧翻译）
         old_key = self._display_to_key(self._tmpl_var.get())
 
-        # 重建下拉框翻译映射
-        self._type_display = {k: t(f"types.{k}") for k in ENTRY_TYPES}
-        self._type_values = list(self._type_display.values())
+        # 重建下拉框翻译映射（含字段预览）
+        self._type_display = {}
+        self._display_to_key_map = {}
+        display_list = []
+        for k in ENTRY_TYPES:
+            fields = get_template_fields(k)
+            preview = ", ".join(fields)
+            display = f"{t(f'types.{k}')}  →  {preview}"
+            self._type_display[k] = display
+            self._display_to_key_map[display] = k
+            display_list.append(display)
+        self._type_values = display_list
         self._tmpl_combo.config(values=self._type_values)
 
         # 恢复模板选中项（用新翻译显示）
@@ -308,6 +338,7 @@ class EntryEditor(ttk.Frame):
         if hasattr(self, '_tmpl_combo'):
             self._tmpl_combo.config(font=nf)
         # 更新所有动态字段行中的 Entry
-        for _, _, name_entry, val_entry, _ in self._field_rows:
+        for item in self._field_rows:
+            name_entry, val_entry = item[2], item[3]
             name_entry.config(font=nf)
             val_entry.config(font=nf)

@@ -1,5 +1,8 @@
 """主窗口：菜单栏、左右面板组合、事件协调。"""
 
+import os
+import glob
+import tempfile
 import tkinter as tk
 import tkinter.font as tkfont
 from tkinter import ttk, filedialog, messagebox
@@ -7,6 +10,7 @@ from i18n import t, load_language, current_lang
 from bib_parser import load_bibtex, save_bibtex
 from gui_entry_list import EntryListPanel
 from gui_editor import EntryEditor
+from gui_fetcher import FetcherPanel
 
 
 class MainWindow:
@@ -26,6 +30,7 @@ class MainWindow:
         self._modified = False
         self._current_index = -1
         self._current_scale = 1.0
+        self._temp_files = []  # 记录运行期间创建的临时文件
 
         self._init_fonts()
         self._init_styles()
@@ -86,6 +91,7 @@ class MainWindow:
         # 通知面板刷新
         self.entry_list.apply_font_scale(scale)
         self.editor.apply_font_scale(scale)
+        self.fetcher.apply_font_scale(scale)
 
     # ---------- 菜单 ----------
 
@@ -135,21 +141,27 @@ class MainWindow:
     # ---------- 布局 ----------
 
     def _build_layout(self):
-        # 主分栏
-        paned = ttk.PanedWindow(self.root, orient=tk.HORIZONTAL)
-        paned.pack(fill=tk.BOTH, expand=True)
+        # 主分栏（水平）
+        main_paned = ttk.PanedWindow(self.root, orient=tk.HORIZONTAL)
+        main_paned.pack(fill=tk.BOTH, expand=True)
 
         # 左侧：条目列表
         self.entry_list = EntryListPanel(
-            paned, fonts=self._fonts, on_select_callback=self._on_entry_select
+            main_paned, fonts=self._fonts, on_select_callback=self._on_entry_select
         )
-        paned.add(self.entry_list, weight=1)
+        main_paned.add(self.entry_list, weight=1)
 
-        # 右侧：编辑器
+        # 右侧：上下分割（编辑器 + 获取面板）
+        right_paned = ttk.PanedWindow(main_paned, orient=tk.VERTICAL)
+        main_paned.add(right_paned, weight=3)
+
         self.editor = EntryEditor(
-            paned, fonts=self._fonts, on_change_callback=self._on_editor_change
+            right_paned, fonts=self._fonts, on_change_callback=self._on_editor_change
         )
-        paned.add(self.editor, weight=3)
+        right_paned.add(self.editor, weight=3)
+
+        self.fetcher = FetcherPanel(right_paned, fonts=self._fonts)
+        right_paned.add(self.fetcher, weight=1)
 
         # 状态栏
         self.status_var = tk.StringVar(value=t("status.no_file"))
@@ -293,6 +305,7 @@ class MainWindow:
         self._rebuild_menu()
         self.entry_list.refresh_ui_text()
         self.editor.refresh_ui_text()
+        self.fetcher.refresh_ui_text()
         self._update_title()
         self.status_var.set(t("status.ready"))
 
@@ -324,4 +337,28 @@ class MainWindow:
         if self._modified:
             if not self._confirm_save():
                 return
+        self._cleanup_temp_files()
         self.root.destroy()
+
+    def _cleanup_temp_files(self):
+        """删除运行期间创建的所有临时文件。"""
+        for f in self._temp_files:
+            try:
+                if os.path.exists(f):
+                    os.remove(f)
+            except OSError:
+                pass
+        self._temp_files.clear()
+
+        # 额外清理：删除程序工作目录下可能遗留的临时文件
+        work_dir = os.path.dirname(os.path.abspath(__file__))
+        for pattern in ["*.tmp", "*.temp", "*~"]:
+            for f in glob.glob(os.path.join(work_dir, pattern)):
+                try:
+                    os.remove(f)
+                except OSError:
+                    pass
+
+    def register_temp_file(self, filepath: str):
+        """注册一个临时文件，退出时自动删除。"""
+        self._temp_files.append(filepath)
