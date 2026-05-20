@@ -61,9 +61,12 @@ fetcher:
   input_hint: Enter DOI, DOI URL, arXiv ID or arXiv URL
   fetch: Fetch
   fetching: Fetching...
+  tab_raw: Raw Text
+  tab_parsed: Parsed Fields
   result: Result
   error: Fetch failed
-  copy_hint: Select and copy field values above to paste into the editor
+  parse_error: Parse failed
+  copy_hint: Select and copy field values to paste into the editor
 
 conference:
   title: Select Conference

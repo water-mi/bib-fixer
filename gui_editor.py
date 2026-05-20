@@ -10,7 +10,8 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 from i18n import t
 from templates import (
-    ENTRY_TYPES, get_template_fields, align_to_template,
+    ENTRY_TYPES, TEMPLATES, ENTRYTYPE_MAP,
+    get_template_fields, align_to_template,
     resolve_internal_key,
 )
 from gui_conference_picker import ConferencePickerDialog
@@ -54,14 +55,14 @@ class EntryEditor(ttk.Frame):
         self._tmpl_label = ttk.Label(tmpl_frame, text=t("entry.template") + ":", style="Editor.TLabel")
         self._tmpl_label.pack(side=tk.LEFT)
 
-        # 构建下拉选项：internal_key → "翻译名  →  field1, field2, ..."
+        # 构建下拉选项：格式 "@entrytype (类型说明)"
+        # 例如 "@article (期刊文章)", "@article (arXiv 预印本)", "@book (书籍)"
         self._type_display = {}
-        self._display_to_key_map = {}  # display → internal_key 反向映射
+        self._display_to_key_map = {}
         display_list = []
         for k in ENTRY_TYPES:
-            fields = get_template_fields(k)
-            preview = ", ".join(fields)
-            display = f"{t(f'types.{k}')}  →  {preview}"
+            etype = ENTRYTYPE_MAP.get(k, k)
+            display = f"@{etype} ({t(f'types.{k}')})"
             self._type_display[k] = display
             self._display_to_key_map[display] = k
             display_list.append(display)
@@ -70,7 +71,7 @@ class EntryEditor(ttk.Frame):
         self._tmpl_var = tk.StringVar()
         self._tmpl_combo = ttk.Combobox(
             tmpl_frame, textvariable=self._tmpl_var, values=self._type_values,
-            state="readonly", width=50, font=nf,
+            state="readonly", width=35, font=nf,
         )
         self._tmpl_combo.pack(side=tk.LEFT, padx=5)
         self._tmpl_combo.bind("<<ComboboxSelected>>", self._on_type_changed)
@@ -310,14 +311,13 @@ class EntryEditor(ttk.Frame):
         # 先保存当前模板 internal_key（基于旧翻译）
         old_key = self._display_to_key(self._tmpl_var.get())
 
-        # 重建下拉框翻译映射（含字段预览）
+        # 重建下拉框翻译映射（@entrytype (说明) 格式）
         self._type_display = {}
         self._display_to_key_map = {}
         display_list = []
         for k in ENTRY_TYPES:
-            fields = get_template_fields(k)
-            preview = ", ".join(fields)
-            display = f"{t(f'types.{k}')}  →  {preview}"
+            etype = ENTRYTYPE_MAP.get(k, k)
+            display = f"@{etype} ({t(f'types.{k}')})"
             self._type_display[k] = display
             self._display_to_key_map[display] = k
             display_list.append(display)

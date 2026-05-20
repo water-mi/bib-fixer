@@ -61,9 +61,12 @@ fetcher:
   input_hint: 输入 DOI、DOI URL、arXiv ID 或 arXiv URL
   fetch: 获取
   fetching: 获取中...
+  tab_raw: 原始文本
+  tab_parsed: 解析字段
   result: 获取结果
   error: 获取失败
-  copy_hint: 可选中并复制上方字段值粘贴到编辑器中
+  parse_error: 解析失败
+  copy_hint: 可选中并复制字段值粘贴到上方编辑器
 
 conference:
   title: 选择会议
