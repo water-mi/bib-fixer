@@ -255,8 +255,7 @@ class MainWindow:
     # ---------- 条目操作 ----------
 
     def _on_entry_select(self, index: int):
-        """列表选中某条目时触发。如果当前条目有未保存修改，先询问。"""
-        # 检查当前条目是否被修改
+        """列表选中某条目时触发。如果当前条目有未保存修改，先询问是否保存到文件。"""
         if self._current_index >= 0 and self._has_entry_changed():
             answer = messagebox.askyesnocancel(
                 t("dialog.confirm_save"),
@@ -265,11 +264,18 @@ class MainWindow:
             if answer is None:  # 取消 — 留在当前条目
                 self.entry_list.select_index(self._current_index)
                 return
-            if answer:  # 是 — 保存到内存再切换
+            if answer:  # 是 — 先保存到内存，再写入文件
                 self._save_current_entry()
+                if self._filepath:
+                    try:
+                        save_bibtex(self._filepath, self.entry_list.get_entries())
+                    except Exception as e:
+                        messagebox.showerror(t("dialog.error_save"), str(e))
+                else:
+                    # 无文件路径则弹出另存为
+                    self._save_as_file()
             # 否 — 直接丢弃修改，不保存
         else:
-            # 没有修改，正常保存（写入可能存在的微小变动）
             self._save_current_entry()
 
         if index < 0:
@@ -364,7 +370,10 @@ class MainWindow:
         messagebox.showinfo(t("about.title"), t("about.text"))
 
     def _on_exit(self):
-        if self._modified:
+        # 先保存当前编辑的条目到内存
+        self._save_current_entry()
+        # 检查是否有未保存的修改（文件级或条目级）
+        if self._modified or self._has_entry_changed():
             if not self._confirm_save():
                 return
         self._cleanup_temp_files()
