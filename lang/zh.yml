@@ -68,3 +68,7 @@ fetcher:
   error: 获取失败
   parse_error: 解析失败
   copy_hint: 可点击 [+] 将字段添加到上方编辑器
+
+conference:
+  title: 选择会议
+  refresh: 刷新重载

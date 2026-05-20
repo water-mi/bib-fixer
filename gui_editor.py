@@ -14,6 +14,7 @@ from templates import (
     get_template_fields, get_entrytype, align_to_template,
     resolve_internal_key,
 )
+from gui_conference_picker import ConferencePickerDialog
 
 
 class EntryEditor(ttk.Frame):
@@ -24,7 +25,7 @@ class EntryEditor(ttk.Frame):
         self.on_change_callback = on_change_callback
         self._fonts = fonts or {}
         self._current_entry = None
-        self._field_rows = []  # [(name_var, value_var, name_entry, val_entry, row), ...]
+        self._field_rows = []  # [(name_var, value_var, name_entry, val_entry, row, picker_btn), ...]
         self._suppress_change = False
 
         # 撤销/重做栈
@@ -166,12 +167,12 @@ class EntryEditor(ttk.Frame):
     # ========== 字段操作 ==========
 
     def _clear_fields(self):
-        for _, _, _, _, row in self._field_rows:
+        for _, _, _, _, row, *_ in self._field_rows:
             row.destroy()
         self._field_rows.clear()
 
     def _add_field(self, field_name="", value=""):
-        """添加一个字段行。"""
+        """添加一个字段行。booktitle 字段会额外显示会议快捷填充按钮。"""
         self._snapshot_before_change()
         nf = self._fonts.get("normal")
         row = ttk.Frame(self.field_container)
@@ -188,11 +189,23 @@ class EntryEditor(ttk.Frame):
         val_entry = ttk.Entry(row, textvariable=value_var, width=40, font=nf)
         val_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 5))
 
+        picker_btn = None
+        if field_name == "booktitle":
+            picker_btn = ttk.Button(
+                row, text="📋", width=3,
+                command=lambda v=value_var: self._open_conference_picker(v)
+            )
+            picker_btn.pack(side=tk.RIGHT, padx=(0, 2))
+
         del_btn = ttk.Button(row, text="✕", width=3,
                              command=lambda r=row, idx=len(self._field_rows): self._delete_field(r, idx))
         del_btn.pack(side=tk.RIGHT)
 
-        self._field_rows.append((name_var, value_var, name_entry, val_entry, row))
+        self._field_rows.append((name_var, value_var, name_entry, val_entry, row, picker_btn))
+
+    def _open_conference_picker(self, value_var: tk.StringVar):
+        """打开会议选择弹窗，选中后填入 booktitle。"""
+        ConferencePickerDialog(self, on_select_callback=value_var.set, fonts=self._fonts)
 
     def _delete_field(self, row_frame, index):
         if 0 <= index < len(self._field_rows):

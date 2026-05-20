@@ -68,3 +68,7 @@ fetcher:
   error: Fetch failed
   parse_error: Parse failed
   copy_hint: Click [+] to add field to the editor above
+
+conference:
+  title: Select Conference
+  refresh: Reload
