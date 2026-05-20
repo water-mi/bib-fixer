@@ -84,10 +84,10 @@ class EntryListPanel(ttk.Frame):
         new_entry = {"ENTRYTYPE": "article", "ID": f"new_entry_{len(self._entries)+1}"}
         self._entries.append(new_entry)
         self._refresh_list()
-        # 选中新条目
         last_idx = len(self._entries) - 1
         self.listbox.selection_clear(0, tk.END)
         self.listbox.selection_set(last_idx)
+        self.listbox.activate(last_idx)
         self.listbox.see(last_idx)
         if self.on_select_callback:
             self.on_select_callback(last_idx)
@@ -98,27 +98,33 @@ class EntryListPanel(ttk.Frame):
             index = sel[0]
             del self._entries[index]
             self._refresh_list()
-            # 选中前一个或第一个
             new_sel = min(index, len(self._entries) - 1)
             if new_sel >= 0:
+                self.listbox.selection_clear(0, tk.END)
                 self.listbox.selection_set(new_sel)
+                self.listbox.activate(new_sel)
+                self.listbox.see(new_sel)
                 if self.on_select_callback:
                     self.on_select_callback(new_sel)
             elif self.on_select_callback:
-                self.on_select_callback(-1)  # 表示无选中
+                self.on_select_callback(-1)
 
     def get_entries(self) -> list[dict]:
         return self._entries
 
     def update_entry(self, index: int, entry: dict):
-        """更新指定位置的条目数据并刷新列表。"""
+        """更新指定位置的条目数据并刷新列表显示。
+        
+        注意：不改变列表选中状态，由调用方负责选中管理。
+        """
         if 0 <= index < len(self._entries):
             self._entries[index] = entry
             self._refresh_list()
-            self.listbox.selection_set(index)
 
     def select_index(self, index: int):
+        """选中并高亮指定索引的条目。"""
         if 0 <= index < len(self._entries):
             self.listbox.selection_clear(0, tk.END)
             self.listbox.selection_set(index)
+            self.listbox.activate(index)
             self.listbox.see(index)

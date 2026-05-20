@@ -30,6 +30,8 @@ dialog:
 
 entry:
   type: 类型
+  type_readonly: (来自文件，只读)
+  template: 对齐模板
   key: 引用键
   fields: 字段
   add_field: 添加字段

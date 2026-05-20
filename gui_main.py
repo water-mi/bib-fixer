@@ -240,7 +240,7 @@ class MainWindow:
 
     def _on_entry_select(self, index: int):
         """列表选中某条目时触发。"""
-        # 先保存当前编辑
+        # 先保存当前编辑到条目列表（不影响选中状态）
         self._save_current_entry()
 
         if index < 0:
@@ -252,6 +252,8 @@ class MainWindow:
         if 0 <= index < len(entries):
             self._current_index = index
             self.editor.load_entry(entries[index])
+            # 显式恢复正确的选中高亮（_save_current_entry 中的 refresh_list 会清掉选中）
+            self.entry_list.select_index(index)
 
     def _on_editor_change(self):
         """编辑器内容变化时触发。"""

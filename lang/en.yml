@@ -30,6 +30,8 @@ dialog:
 
 entry:
   type: Type
+  type_readonly: (from file, read-only)
+  template: Align Template
   key: Citation Key
   fields: Fields
   add_field: Add Field
