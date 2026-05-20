@@ -20,6 +20,7 @@ dialog:
   confirm_save: Save current changes?
   confirm_delete: Are you sure you want to delete this entry?
   unsaved_changes: There are unsaved changes. Save now?
+  entry_modified: This entry has been modified. Save changes to memory?
   file_loaded: Loaded {count} entries
   file_saved: File saved successfully
   error_open: Cannot open file

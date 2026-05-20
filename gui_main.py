@@ -31,6 +31,7 @@ class MainWindow:
         self._current_index = -1
         self._current_scale = 1.0
         self._temp_files = []  # 记录运行期间创建的临时文件
+        self._original_entry = None  # 加载条目时的原始副本，用于比较是否修改
 
         self._init_fonts()
         self._init_styles()
@@ -254,21 +255,47 @@ class MainWindow:
     # ---------- 条目操作 ----------
 
     def _on_entry_select(self, index: int):
-        """列表选中某条目时触发。"""
-        # 先保存当前编辑到条目列表（不影响选中状态）
-        self._save_current_entry()
+        """列表选中某条目时触发。如果当前条目有未保存修改，先询问。"""
+        # 检查当前条目是否被修改
+        if self._current_index >= 0 and self._has_entry_changed():
+            answer = messagebox.askyesnocancel(
+                t("dialog.confirm_save"),
+                t("dialog.entry_modified")
+            )
+            if answer is None:  # 取消 — 留在当前条目
+                self.entry_list.select_index(self._current_index)
+                return
+            if answer:  # 是 — 保存到内存再切换
+                self._save_current_entry()
+            # 否 — 直接丢弃修改，不保存
+        else:
+            # 没有修改，正常保存（写入可能存在的微小变动）
+            self._save_current_entry()
 
         if index < 0:
             self.editor.load_entry(None)
             self._current_index = -1
+            self._original_entry = None
             return
 
         entries = self.entry_list.get_entries()
         if 0 <= index < len(entries):
             self._current_index = index
             self.editor.load_entry(entries[index])
-            # 显式恢复正确的选中高亮（_save_current_entry 中的 refresh_list 会清掉选中）
+            self._original_entry = dict(entries[index])
             self.entry_list.select_index(index)
+
+    def _has_entry_changed(self) -> bool:
+        """比较当前编辑器状态与加载时的原始条目是否有变化。"""
+        if self._original_entry is None:
+            return False
+        current = self.editor.get_entry_data()
+        if current is None:
+            return False
+        # 比较字段
+        orig_fields = {k: str(v) for k, v in self._original_entry.items()}
+        curr_fields = {k: str(v) for k, v in current.items()}
+        return orig_fields != curr_fields
 
     def _on_editor_change(self):
         """编辑器内容变化时触发。"""

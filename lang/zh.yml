@@ -20,6 +20,7 @@ dialog:
   confirm_save: 是否保存当前修改？
   confirm_delete: 确定要删除此条目吗？
   unsaved_changes: 有未保存的修改，是否保存？
+  entry_modified: 当前条目已被修改，是否保存到内存中？
   file_loaded: 已加载 {count} 个条目
   file_saved: 文件已保存
   error_open: 无法打开文件
