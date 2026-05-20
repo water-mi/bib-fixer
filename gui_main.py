@@ -309,13 +309,14 @@ class MainWindow:
         self._update_title()
 
     def _save_current_entry(self) -> bool:
-        """将编辑器中的当前数据保存回条目列表。"""
+        """将编辑器中的当前数据保存回条目列表，并同步原始副本。"""
         if self._current_index < 0:
             return True
         entry_data = self.editor.get_entry_data()
         if entry_data is None:
             return True
         self.entry_list.update_entry(self._current_index, entry_data)
+        self._original_entry = dict(entry_data)  # 同步比较基准
         return True
 
     def _add_entry(self):

@@ -316,7 +316,8 @@ class EntryEditor(ttk.Frame):
         if self._current_entry is None:
             return
         # 检查是否已有同名字段
-        for name_var, value_var, _, _, _ in self._field_rows:
+        for item in self._field_rows:
+            name_var, value_var = item[0], item[1]
             if name_var.get().strip() == field_name:
                 # 已有则更新值
                 value_var.set(value)
