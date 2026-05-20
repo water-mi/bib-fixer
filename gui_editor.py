@@ -10,11 +10,10 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 from i18n import t
 from templates import (
-    ENTRY_TYPES, TEMPLATES, ENTRYTYPE_MAP,
-    get_template_fields, align_to_template,
+    ENTRY_TYPES, ENTRYTYPE_MAP,
+    get_template_fields, get_entrytype, align_to_template,
     resolve_internal_key,
 )
-from gui_conference_picker import ConferencePickerDialog
 
 
 class EntryEditor(ttk.Frame):
@@ -25,10 +24,20 @@ class EntryEditor(ttk.Frame):
         self.on_change_callback = on_change_callback
         self._fonts = fonts or {}
         self._current_entry = None
-        self._field_rows = []  # [(name_var, value_var, name_entry, val_entry, row, picker_btn), ...]
+        self._field_rows = []  # [(name_var, value_var, name_entry, val_entry, row), ...]
         self._suppress_change = False
 
+        # 撤销/重做栈
+        self._undo_stack = []   # list of snapshots
+        self._redo_stack = []   # list of snapshots
+        self._pending_snapshot = None  # 待确认的快照（在操作前保存）
+
         self._build_ui()
+
+        # 绑定撤销/重做快捷键
+        self.bind_all("<Control-z>", lambda e: self._undo(), add="+")
+        self.bind_all("<Control-Shift-Z>", lambda e: self._redo(), add="+")
+        self.bind_all("<Control-Z>", lambda e: self._undo(), add="+")  # 部分系统 Ctrl+Shift+Z 被解释为 Ctrl+Z
 
     def _build_ui(self):
         nf = self._fonts.get("normal")
@@ -157,12 +166,13 @@ class EntryEditor(ttk.Frame):
     # ========== 字段操作 ==========
 
     def _clear_fields(self):
-        for _, _, _, _, row, *_ in self._field_rows:
+        for _, _, _, _, row in self._field_rows:
             row.destroy()
         self._field_rows.clear()
 
     def _add_field(self, field_name="", value=""):
-        """添加一个字段行。booktitle 字段会额外显示会议快捷填充按钮。"""
+        """添加一个字段行。"""
+        self._snapshot_before_change()
         nf = self._fonts.get("normal")
         row = ttk.Frame(self.field_container)
         row.pack(fill=tk.X, pady=2)
@@ -178,27 +188,15 @@ class EntryEditor(ttk.Frame):
         val_entry = ttk.Entry(row, textvariable=value_var, width=40, font=nf)
         val_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 5))
 
-        picker_btn = None
-        if field_name == "booktitle":
-            # 会议名快捷填充按钮
-            picker_btn = ttk.Button(
-                row, text="📋", width=3,
-                command=lambda v=value_var: self._open_conference_picker(v)
-            )
-            picker_btn.pack(side=tk.RIGHT, padx=(0, 2))
-
         del_btn = ttk.Button(row, text="✕", width=3,
                              command=lambda r=row, idx=len(self._field_rows): self._delete_field(r, idx))
         del_btn.pack(side=tk.RIGHT)
 
-        self._field_rows.append((name_var, value_var, name_entry, val_entry, row, picker_btn))
-
-    def _open_conference_picker(self, value_var: tk.StringVar):
-        """打开会议选择弹窗，选中后填入 booktitle。"""
-        ConferencePickerDialog(self, on_select_callback=value_var.set, fonts=self._fonts)
+        self._field_rows.append((name_var, value_var, name_entry, val_entry, row))
 
     def _delete_field(self, row_frame, index):
         if 0 <= index < len(self._field_rows):
+            self._snapshot_before_change()
             row_frame.destroy()
             self._field_rows.pop(index)
             self._notify_change()
@@ -207,6 +205,7 @@ class EntryEditor(ttk.Frame):
         """对齐到模板下拉框中当前选中的模板。"""
         if self._current_entry is None:
             return
+        self._snapshot_before_change()
         internal_key = self._display_to_key(self._tmpl_var.get())
         if not internal_key:
             return
@@ -218,6 +217,9 @@ class EntryEditor(ttk.Frame):
         aligned = align_to_template(internal_key, current_fields)
         self._suppress_change = True
         self._clear_fields()
+        # 同步更新条目类型为模板对应的 ENTRYTYPE
+        self._entry_type = get_entrytype(internal_key)
+        self._type_value_label.config(text=f"@{self._entry_type}")
         template_fields = get_template_fields(internal_key)
         for field in template_fields:
             self._add_field(field, aligned.get(field, ""))
@@ -295,6 +297,86 @@ class EntryEditor(ttk.Frame):
             if fname:
                 fields[fname] = value_var.get()
         return fields
+
+    def add_field_from_fetcher(self, field_name: str, value: str):
+        """从 DOI 获取面板快速添加字段到当前条目。"""
+        if self._current_entry is None:
+            return
+        # 检查是否已有同名字段
+        for name_var, value_var, _, _, _ in self._field_rows:
+            if name_var.get().strip() == field_name:
+                # 已有则更新值
+                value_var.set(value)
+                self._notify_change()
+                return
+        # 不存在则新增
+        self._snapshot_before_change()
+        self._add_field(field_name, value)
+        self._notify_change()
+
+    # ========== 撤销/重做 ==========
+
+    def _snapshot_before_change(self):
+        """在变更前保存当前状态快照。"""
+        if self._suppress_change:
+            return
+        snap = self._make_snapshot()
+        if snap is not None:
+            self._undo_stack.append(snap)
+            self._redo_stack.clear()
+            # 限制栈深度
+            if len(self._undo_stack) > 100:
+                self._undo_stack.pop(0)
+
+    def _make_snapshot(self) -> tuple | None:
+        """创建当前编辑器状态的快照。"""
+        try:
+            fields = [(v[0].get(), v[1].get()) for v in self._field_rows]
+            return (
+                self._entry_type,
+                self._tmpl_var.get(),
+                self.key_var.get(),
+                fields,
+            )
+        except Exception:
+            return None
+
+    def _restore_snapshot(self, snap: tuple):
+        """从快照恢复编辑器状态。"""
+        self._suppress_change = True
+        self._clear_fields()
+        entry_type, tmpl_display, key, fields = snap
+        self._entry_type = entry_type
+        if entry_type:
+            self._type_value_label.config(text=f"@{entry_type}")
+        self._tmpl_var.set(tmpl_display)
+        self.key_var.set(key)
+        for fname, fval in fields:
+            self._add_field(fname, fval)
+        self._suppress_change = False
+        self._notify_change()
+
+    def _undo(self):
+        """撤销上一步操作。"""
+        if not self._undo_stack:
+            return
+        # 先保存当前状态到 redo
+        current = self._make_snapshot()
+        if current is not None:
+            self._redo_stack.append(current)
+        snap = self._undo_stack.pop()
+        self._restore_snapshot(snap)
+
+    def _redo(self):
+        """重做被撤销的操作。"""
+        if not self._redo_stack:
+            return
+        # 先保存当前状态到 undo
+        current = self._make_snapshot()
+        if current is not None:
+            self._undo_stack.append(current)
+        snap = self._redo_stack.pop()
+        self._restore_snapshot(snap)
 
     def has_entry(self) -> bool:
         return self._current_entry is not None

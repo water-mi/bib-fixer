@@ -66,10 +66,4 @@ fetcher:
   result: Result
   error: Fetch failed
   parse_error: Parse failed
-  copy_hint: Select and copy field values to paste into the editor
-
-conference:
-  title: Select Conference
-  refresh: Reload
-  no_presets: No conference presets available
-  load_error: Failed to load conference presets file
+  copy_hint: Click [+] to add field to the editor above

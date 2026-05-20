@@ -66,10 +66,4 @@ fetcher:
   result: 获取结果
   error: 获取失败
   parse_error: 解析失败
-  copy_hint: 可选中并复制字段值粘贴到上方编辑器
-
-conference:
-  title: 选择会议
-  refresh: 刷新重载
-  no_presets: 暂无可用的会议预设
-  load_error: 加载会议预设文件失败
+  copy_hint: 可点击 [+] 将字段添加到上方编辑器

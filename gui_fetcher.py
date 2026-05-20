@@ -13,10 +13,10 @@ from i18n import t
 class FetcherPanel(ttk.LabelFrame):
     """DOI/arXiv 获取面板。"""
 
-    def __init__(self, parent, fonts=None):
+    def __init__(self, parent, fonts=None, on_add_field=None):
         super().__init__(parent, text=t("fetcher.title"), padding=8)
         self._fonts = fonts or {}
-        self._parsed_entries = []  # 解析后的条目列表
+        self._on_add_field = on_add_field  # callback(field_name, value)
         self._build_ui()
 
     def _build_ui(self):
@@ -67,14 +67,16 @@ class FetcherPanel(ttk.LabelFrame):
         parsed_frame = ttk.Frame(self._notebook, padding=2)
         self._notebook.add(parsed_frame, text=t("fetcher.tab_parsed"))
 
-        # Treeview: 列为 Field | Value
+        # Treeview: 列为 Field | Value | Action
         self._parsed_tree = ttk.Treeview(
-            parsed_frame, columns=("field", "value"), show="headings", height=6,
+            parsed_frame, columns=("field", "value", "action"), show="headings", height=6,
         )
         self._parsed_tree.heading("field", text="Field")
         self._parsed_tree.heading("value", text="Value")
+        self._parsed_tree.heading("action", text="➕")
         self._parsed_tree.column("field", width=100, minwidth=80)
-        self._parsed_tree.column("value", width=350, minwidth=150)
+        self._parsed_tree.column("value", width=300, minwidth=150)
+        self._parsed_tree.column("action", width=40, minwidth=30, anchor=tk.CENTER)
 
         scroll_py = ttk.Scrollbar(parsed_frame, orient=tk.VERTICAL, command=self._parsed_tree.yview)
         self._parsed_tree.configure(yscrollcommand=scroll_py.set)
@@ -82,6 +84,9 @@ class FetcherPanel(ttk.LabelFrame):
         scroll_py.grid(row=0, column=1, sticky="ns")
         parsed_frame.rowconfigure(0, weight=1)
         parsed_frame.columnconfigure(0, weight=1)
+
+        # 点击 action 列触发添加
+        self._parsed_tree.bind("<ButtonRelease-1>", self._on_tree_click)
 
         # 复制提示
         self._copy_hint = ttk.Label(
@@ -138,15 +143,13 @@ class FetcherPanel(ttk.LabelFrame):
 
             self._clear_parsed()
             for entry in entries:
-                # 插入条目类型 + key 作为分组标题
                 etype = entry.get("ENTRYTYPE", "?")
                 eid = entry.get("ID", "?")
-                group_id = self._parsed_tree.insert("", tk.END, values=(f"@{etype}{{{eid}", ""), open=True)
-                # 插入所有字段
+                group_id = self._parsed_tree.insert("", tk.END, values=(f"@{etype}{{{eid}", "", ""), open=True)
                 for field, value in entry.items():
                     if field in ("ID", "ENTRYTYPE"):
                         continue
-                    self._parsed_tree.insert(group_id, tk.END, values=(field, str(value) if value else ""))
+                    self._parsed_tree.insert(group_id, tk.END, values=(field, str(value) if value else "", "➕"))
 
             # 解析成功 → 自动切换到 Parsed Fields
             self._notebook.select(1)
@@ -164,11 +167,33 @@ class FetcherPanel(ttk.LabelFrame):
         self._raw_text.insert("1.0", text)
         self._raw_text.config(state=tk.DISABLED)
 
+    def _on_tree_click(self, event):
+        """处理树点击事件：点击 action 列时添加字段到编辑器。"""
+        region = self._parsed_tree.identify_region(event.x, event.y)
+        if region != "cell":
+            return
+        column = self._parsed_tree.identify_column(event.x)
+        if column != "#3":  # action 列
+            return
+        item = self._parsed_tree.identify_row(event.y)
+        if not item:
+            return
+        values = self._parsed_tree.item(item, "values")
+        if not values or len(values) < 2:
+            return
+        # 检查是否是分组标题行（value 为空且不是 action）
+        field_name = values[0]
+        field_value = values[1]
+        # 跳过分组标题（如 @article{key）
+        if field_name.startswith("@"):
+            return
+        if self._on_add_field and field_name:
+            self._on_add_field(field_name, field_value)
+
     def _clear_parsed(self):
         """清空 Parsed Fields 树。"""
         for item in self._parsed_tree.get_children():
             self._parsed_tree.delete(item)
-        self._parsed_entries.clear()
 
     def refresh_ui_text(self):
         """语言切换后刷新文本。"""

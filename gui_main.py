@@ -160,7 +160,10 @@ class MainWindow:
         )
         right_paned.add(self.editor, weight=3)
 
-        self.fetcher = FetcherPanel(right_paned, fonts=self._fonts)
+        self.fetcher = FetcherPanel(
+            right_paned, fonts=self._fonts,
+            on_add_field=self.editor.add_field_from_fetcher,
+        )
         right_paned.add(self.fetcher, weight=1)
 
         # 状态栏
