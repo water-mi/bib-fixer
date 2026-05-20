@@ -224,7 +224,7 @@ class MainWindow:
         self._modified = False
         self.status_var.set(t("dialog.file_saved"))
         self._update_title()
-        # 恢复列表选中（_save_current_entry 中的 refresh_list 会清掉选中）
+        # 确保当前条目在列表中可见
         if self._current_index >= 0:
             self.entry_list.select_index(self._current_index)
 

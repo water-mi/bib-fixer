@@ -114,17 +114,24 @@ class EntryListPanel(ttk.Frame):
 
     def update_entry(self, index: int, entry: dict):
         """更新指定位置的条目数据并刷新列表显示。
-        
+
         注意：不改变列表选中状态，由调用方负责选中管理。
+        只更新单条记录而不重建整个列表，避免滚动位置跳动。
         """
         if 0 <= index < len(self._entries):
             self._entries[index] = entry
-            self._refresh_list()
+            etype = entry.get("ENTRYTYPE", "?")
+            eid = entry.get("ID", "?")
+            display = f"[{index+1}] @{etype}{{{eid},...}}"
+            self.listbox.delete(index)
+            self.listbox.insert(index, display)
 
     def select_index(self, index: int):
-        """选中并高亮指定索引的条目。"""
+        """选中并高亮指定索引的条目。
+        
+        不调用 see() 以避免自动滚动 — 用户点击可见条目时不应改变滚动位置。
+        """
         if 0 <= index < len(self._entries):
             self.listbox.selection_clear(0, tk.END)
             self.listbox.selection_set(index)
             self.listbox.activate(index)
-            self.listbox.see(index)
