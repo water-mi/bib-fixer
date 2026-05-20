@@ -85,8 +85,9 @@ class FetcherPanel(ttk.LabelFrame):
         parsed_frame.rowconfigure(0, weight=1)
         parsed_frame.columnconfigure(0, weight=1)
 
-        # 点击 action 列触发添加
+        # 点击 action 列触发添加，双击 value 列可编辑
         self._parsed_tree.bind("<ButtonRelease-1>", self._on_tree_click)
+        self._parsed_tree.bind("<Double-1>", self._on_tree_double_click)
 
         # 复制提示
         self._copy_hint = ttk.Label(
@@ -145,11 +146,21 @@ class FetcherPanel(ttk.LabelFrame):
             for entry in entries:
                 etype = entry.get("ENTRYTYPE", "?")
                 eid = entry.get("ID", "?")
-                group_id = self._parsed_tree.insert("", tk.END, values=(f"@{etype}{{{eid}", "", ""), open=True)
+                # 类型和引用键作为独立行展示
+                self._parsed_tree.insert("", tk.END, values=("@type", etype, ""), tags=("meta",))
+                self._parsed_tree.insert("", tk.END, values=("@key", eid, ""), tags=("meta",))
+                # 分隔行
+                sep_id = self._parsed_tree.insert("", tk.END, values=("───", "───", ""), tags=("sep",))
                 for field, value in entry.items():
                     if field in ("ID", "ENTRYTYPE"):
                         continue
-                    self._parsed_tree.insert(group_id, tk.END, values=(field, str(value) if value else "", "➕"))
+                    self._parsed_tree.insert("", tk.END, values=(field, str(value) if value else "", "➕"))
+                # 条目间分隔
+                self._parsed_tree.insert("", tk.END, values=("", "", ""), tags=("sep",))
+
+            # 设置元信息行样式
+            self._parsed_tree.tag_configure("meta", foreground="gray")
+            self._parsed_tree.tag_configure("sep", foreground="lightgray")
 
             # 解析成功 → 自动切换到 Parsed Fields
             self._notebook.select(1)
@@ -168,7 +179,7 @@ class FetcherPanel(ttk.LabelFrame):
         self._raw_text.config(state=tk.DISABLED)
 
     def _on_tree_click(self, event):
-        """处理树点击事件：点击 action 列时添加字段到编辑器。"""
+        """处理单击：点击 action 列时添加字段到编辑器。"""
         region = self._parsed_tree.identify_region(event.x, event.y)
         if region != "cell":
             return
@@ -181,14 +192,54 @@ class FetcherPanel(ttk.LabelFrame):
         values = self._parsed_tree.item(item, "values")
         if not values or len(values) < 2:
             return
-        # 检查是否是分组标题行（value 为空且不是 action）
         field_name = values[0]
         field_value = values[1]
-        # 跳过分组标题（如 @article{key）
-        if field_name.startswith("@"):
+        if not field_name or field_name.startswith("@") or field_name == "───":
             return
-        if self._on_add_field and field_name:
+        if self._on_add_field:
             self._on_add_field(field_name, field_value)
+
+    def _on_tree_double_click(self, event):
+        """处理双击：在 value 列上启动就地编辑。"""
+        region = self._parsed_tree.identify_region(event.x, event.y)
+        if region != "cell":
+            return
+        column = self._parsed_tree.identify_column(event.x)
+        if column != "#2":  # value 列
+            return
+        item = self._parsed_tree.identify_row(event.y)
+        if not item:
+            return
+        values = self._parsed_tree.item(item, "values")
+        if not values or len(values) < 2:
+            return
+        if values[0].startswith("@") or values[0] == "───":
+            return  # 元信息行不可编辑
+
+        # 获取单元格位置
+        bbox = self._parsed_tree.bbox(item, column)
+        if not bbox:
+            return
+        x, y, w, h = bbox
+
+        # 创建覆盖编辑框
+        edit_var = tk.StringVar(value=values[1])
+        edit_entry = ttk.Entry(self._parsed_tree, textvariable=edit_var, font=self._fonts.get("normal"))
+        edit_entry.place(x=x, y=y, width=w, height=h)
+        edit_entry.focus_set()
+        edit_entry.select_range(0, tk.END)
+
+        def save_edit():
+            new_val = edit_var.get()
+            all_vals = list(self._parsed_tree.item(item, "values"))
+            if len(all_vals) >= 2:
+                all_vals[1] = new_val
+                self._parsed_tree.item(item, values=tuple(all_vals))
+            edit_entry.destroy()
+
+        edit_entry.bind("<Return>", lambda e: save_edit())
+        edit_entry.bind("<FocusOut>", lambda e: save_edit())
+        edit_entry.bind("<Escape>", lambda e: edit_entry.destroy())
 
     def _clear_parsed(self):
         """清空 Parsed Fields 树。"""
