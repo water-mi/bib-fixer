@@ -1,0 +1,54 @@
+menu:
+  file: File
+  open: Open
+  save: Save
+  save_as: Save As
+  exit: Exit
+  edit: Edit
+  add_entry: Add Entry
+  delete_entry: Delete Entry
+  language: Language
+  help: Help
+  about: About
+
+dialog:
+  open_title: Select BibTeX File
+  save_title: Save BibTeX File
+  save_as_title: Save As BibTeX File
+  bib_filter: BibTeX Files (*.bib)
+  all_files: All Files (*.*)
+  confirm_save: Save current changes?
+  confirm_delete: Are you sure you want to delete this entry?
+  unsaved_changes: There are unsaved changes. Save now?
+  file_loaded: Loaded {count} entries
+  file_saved: File saved successfully
+  error_open: Cannot open file
+  error_save: Cannot save file
+  error_parse: Failed to parse file
+  no_file: No file opened yet
+  align_confirm: Aligning to template will remove fields not in the template and add missing ones. Continue?
+
+entry:
+  type: Type
+  key: Citation Key
+  fields: Fields
+  add_field: Add Field
+  delete_field: Delete Field
+  align_template: Align to Template
+  value: Value
+  new_field_name: New field name
+  no_entry_selected: Please select an entry first
+
+types:
+  article: Journal Article
+  book: Book
+  inproceedings: Conference Paper
+
+status:
+  ready: Ready
+  modified: Modified
+  no_file: No file opened
+
+about:
+  title: About BibTeX Fixer
+  text: "BibTeX Fixer v1.0\nA GUI tool for reading and editing BibTeX files."

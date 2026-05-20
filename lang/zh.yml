@@ -1,0 +1,54 @@
+menu:
+  file: 文件
+  open: 打开
+  save: 保存
+  save_as: 另存为
+  exit: 退出
+  edit: 编辑
+  add_entry: 添加条目
+  delete_entry: 删除条目
+  language: 语言
+  help: 帮助
+  about: 关于
+
+dialog:
+  open_title: 选择 BibTeX 文件
+  save_title: 保存 BibTeX 文件
+  save_as_title: 另存为 BibTeX 文件
+  bib_filter: BibTeX 文件 (*.bib)
+  all_files: 所有文件 (*.*)
+  confirm_save: 是否保存当前修改？
+  confirm_delete: 确定要删除此条目吗？
+  unsaved_changes: 有未保存的修改，是否保存？
+  file_loaded: 已加载 {count} 个条目
+  file_saved: 文件已保存
+  error_open: 无法打开文件
+  error_save: 无法保存文件
+  error_parse: 文件解析失败
+  no_file: 尚未打开任何文件
+  align_confirm: 对齐模板将删除不属于模板的字段，并补全缺失字段。是否继续？
+
+entry:
+  type: 类型
+  key: 引用键
+  fields: 字段
+  add_field: 添加字段
+  delete_field: 删除字段
+  align_template: 对齐模板
+  value: 值
+  new_field_name: 新字段名
+  no_entry_selected: 请先选择一个条目
+
+types:
+  article: 期刊文章
+  book: 书籍
+  inproceedings: 会议论文
+
+status:
+  ready: 就绪
+  modified: 已修改
+  no_file: 未打开文件
+
+about:
+  title: 关于 BibTeX Fixer
+  text: "BibTeX Fixer v1.0\n用于读取和编辑 BibTeX 文件的 GUI 工具。"

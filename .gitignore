@@ -1,0 +1,3 @@
+*.bib
+*.md
+__pycache__/
