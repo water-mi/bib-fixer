@@ -41,6 +41,7 @@ entry:
 
 types:
   article: 期刊文章
+  article_arxiv: arXiv 预印本
   book: 书籍
   inproceedings: 会议论文
 

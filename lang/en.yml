@@ -41,6 +41,7 @@ entry:
 
 types:
   article: Journal Article
+  article_arxiv: arXiv Preprint
   book: Book
   inproceedings: Conference Paper
 

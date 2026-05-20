@@ -1,9 +1,18 @@
-"""右侧编辑器面板：编辑选中条目的字段。"""
+"""右侧编辑器面板：编辑选中条目的字段。
+
+支持两种 article 模板变体：
+  - article（期刊）: title, author, journal, volume, number, pages, year
+  - article_arxiv（预印本）: title, author, journal, year
+两者在 BibTeX 中的 ENTRYTYPE 均为 "article"，保存时自动映射。
+"""
 
 import tkinter as tk
 from tkinter import ttk, messagebox
 from i18n import t
-from templates import ENTRY_TYPES, get_template_fields, align_to_template
+from templates import (
+    ENTRY_TYPES, get_template_fields, align_to_template,
+    get_entrytype, resolve_internal_key,
+)
 
 
 class EntryEditor(ttk.Frame):
@@ -22,15 +31,20 @@ class EntryEditor(ttk.Frame):
     def _build_ui(self):
         nf = self._fonts.get("normal")
 
-        # --- 类型选择 ---
+        # --- 类型选择（下拉框显示翻译后的名称）---
         type_frame = ttk.Frame(self)
         type_frame.pack(fill=tk.X, pady=(0, 5))
         self._type_label = ttk.Label(type_frame, text=t("entry.type") + ":", style="Editor.TLabel")
         self._type_label.pack(side=tk.LEFT)
+
+        # 构建下拉选项：显示名列表（internal_key → 翻译名）
+        self._type_display = {k: t(f"types.{k}") for k in ENTRY_TYPES}
+        self._type_values = list(self._type_display.values())
+
         self.type_var = tk.StringVar()
         self.type_combo = ttk.Combobox(
-            type_frame, textvariable=self.type_var, values=ENTRY_TYPES, state="readonly", width=18,
-            font=nf,
+            type_frame, textvariable=self.type_var, values=self._type_values,
+            state="readonly", width=22, font=nf,
         )
         self.type_combo.pack(side=tk.LEFT, padx=5)
         self.type_combo.bind("<<ComboboxSelected>>", self._on_type_changed)
@@ -103,6 +117,21 @@ class EntryEditor(ttk.Frame):
     def _on_mousewheel(self, event):
         self.field_canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
 
+    # ========== 类型显示名 ↔ internal_key 转换 ==========
+
+    def _display_to_key(self, display: str) -> str:
+        """将下拉框显示名转回 internal_key。"""
+        for key, name in self._type_display.items():
+            if name == display:
+                return key
+        return "article"  # fallback
+
+    def _key_to_display(self, key: str) -> str:
+        """将 internal_key 转为下拉框显示名。"""
+        return self._type_display.get(key, key)
+
+    # ========== 字段操作 ==========
+
     def _clear_fields(self):
         for _, _, _, _, row in self._field_rows:
             row.destroy()
@@ -137,20 +166,21 @@ class EntryEditor(ttk.Frame):
             self._notify_change()
 
     def _align_to_template(self):
+        """对齐到当前选中类型对应的模板。"""
         if self._current_entry is None:
             return
-        entry_type = self.type_var.get()
-        if not entry_type:
+        internal_key = self._display_to_key(self.type_var.get())
+        if not internal_key:
             return
         ok = messagebox.askyesno(t("entry.align_template"), t("dialog.align_confirm"))
         if not ok:
             return
 
         current_fields = self.get_fields()
-        aligned = align_to_template(entry_type, current_fields)
+        aligned = align_to_template(internal_key, current_fields)
         self._suppress_change = True
         self._clear_fields()
-        template_fields = get_template_fields(entry_type)
+        template_fields = get_template_fields(internal_key)
         for field in template_fields:
             self._add_field(field, aligned.get(field, ""))
         self._suppress_change = False
@@ -166,7 +196,11 @@ class EntryEditor(ttk.Frame):
             self.on_change_callback()
 
     def load_entry(self, entry: dict | None):
-        """加载一个条目到编辑器。"""
+        """加载一个条目到编辑器。
+
+        自动根据条目内容匹配最佳的模板变体
+        （例如 article 条目字段少则匹配 article_arxiv，字段多则匹配 article）。
+        """
         self._suppress_change = True
         self._clear_fields()
 
@@ -176,8 +210,8 @@ class EntryEditor(ttk.Frame):
             self.key_var.set("")
         else:
             self._current_entry = entry
-            entry_type = entry.get("ENTRYTYPE", "article")
-            self.type_var.set(entry_type)
+            internal_key = resolve_internal_key(entry)
+            self.type_var.set(self._key_to_display(internal_key))
             self.key_var.set(entry.get("ID", ""))
 
             # 收集所有字段（排除 ID 和 ENTRYTYPE）
@@ -188,12 +222,16 @@ class EntryEditor(ttk.Frame):
         self._suppress_change = False
 
     def get_entry_data(self) -> dict | None:
-        """获取当前编辑的条目数据。"""
+        """获取当前编辑的条目数据。
+
+        将 internal_key 映射为正确的 BibTeX ENTRYTYPE 再输出。
+        """
         if self._current_entry is None and not self.key_var.get():
             return None
 
+        internal_key = self._display_to_key(self.type_var.get())
         entry = {
-            "ENTRYTYPE": self.type_var.get(),
+            "ENTRYTYPE": get_entrytype(internal_key),
             "ID": self.key_var.get(),
         }
         for item in self._field_rows:
@@ -217,12 +255,24 @@ class EntryEditor(ttk.Frame):
         return self._current_entry is not None
 
     def refresh_ui_text(self):
-        """语言切换后刷新文本。"""
+        """语言切换后刷新文本，包括下拉框选项的翻译。"""
         self._type_label.config(text=t("entry.type") + ":")
         self._key_label.config(text=t("entry.key") + ":")
         self._fields_label.config(text=t("entry.fields"))
         self._add_field_btn.config(text=t("entry.add_field"))
         self._align_btn.config(text=t("entry.align_template"))
+
+        # 先保存当前 internal_key（基于旧翻译）
+        old_key = self._display_to_key(self.type_var.get())
+
+        # 重建下拉框翻译映射
+        self._type_display = {k: t(f"types.{k}") for k in ENTRY_TYPES}
+        self._type_values = list(self._type_display.values())
+        self.type_combo.config(values=self._type_values)
+
+        # 恢复选中项（用新翻译显示）
+        if old_key:
+            self.type_var.set(self._key_to_display(old_key))
 
     def apply_font_scale(self, scale: float):
         """窗口缩放时更新字体。"""
